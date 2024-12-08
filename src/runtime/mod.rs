@@ -125,7 +125,10 @@ impl Runtime {
 
         impl Drop for ContextGuard {
             fn drop(&mut self) {
-                CONTEXT.with(|cx| cx.unset_driver());
+                CONTEXT.with(|cx| {
+                    let _ = cx.handle().unwrap().unregister_buffers_cleanup();
+                    cx.unset_driver();
+                });
             }
         }
 
