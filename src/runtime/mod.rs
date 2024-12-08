@@ -92,6 +92,16 @@ impl Runtime {
         })
     }
 
+    /// Returns a reference to the local set.
+    pub fn local(&self) -> &LocalSet {
+        &self.local
+    }
+
+    /// Returns a reference to the underlying singlethreaded tokio runtime
+    pub fn runtime(&self) -> &tokio::runtime::Runtime {
+        &self.tokio_rt
+    }
+
     /// Runs a future to completion on the tokio-uring runtime. This is the
     /// runtime's entry point.
     ///
