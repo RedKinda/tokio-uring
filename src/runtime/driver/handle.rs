@@ -63,6 +63,10 @@ impl Handle {
         self.inner.borrow_mut().unregister_buffers(buffers)
     }
 
+    pub(crate) fn unregister_buffers_cleanup(&self) -> io::Result<()> {
+        self.inner.borrow_mut().unregister_buffers_cleanup()
+    }
+
     pub(crate) fn submit_op_2(&self, sqe: squeue::Entry) -> usize {
         self.inner.borrow_mut().submit_op_2(sqe)
     }

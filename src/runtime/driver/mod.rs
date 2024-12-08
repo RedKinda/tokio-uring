@@ -107,6 +107,19 @@ impl Driver {
         Ok(())
     }
 
+    pub(crate) fn unregister_buffers_cleanup(&mut self) -> io::Result<()> {
+        if let Some(_) = &self.fixed_buffers {
+            self.uring.submitter().unregister_buffers()?;
+            self.fixed_buffers = None;
+            Ok(())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "fixed buffers are not currently registered",
+            ))
+        }
+    }
+
     pub(crate) fn unregister_buffers(
         &mut self,
         buffers: Rc<RefCell<dyn FixedBuffers>>,
