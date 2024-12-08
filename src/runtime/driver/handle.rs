@@ -45,8 +45,14 @@ impl Handle {
         self.inner.borrow_mut().dispatch_completions()
     }
 
-    pub(crate) fn flush(&self) -> io::Result<usize> {
-        self.inner.borrow_mut().uring.submit()
+    pub(crate) fn flush(&self) -> io::Result<()> {
+        let mut inner = self.inner.borrow_mut();
+        if inner.needs_flushing {
+            inner.needs_flushing = false;
+            inner.submit()
+        } else {
+            Ok(())
+        }
     }
 
     pub(crate) fn register_buffers(

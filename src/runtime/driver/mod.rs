@@ -25,6 +25,8 @@ pub(crate) struct Driver {
     /// Ensures that the buffers are not dropped until
     /// after the io-uring runtime has terminated.
     fixed_buffers: Option<Rc<RefCell<dyn FixedBuffers>>>,
+
+    needs_flushing: bool,
 }
 
 struct Ops {
@@ -44,6 +46,7 @@ impl Driver {
             ops: Ops::new(),
             uring,
             fixed_buffers: None,
+            needs_flushing: true,
         })
     }
 
@@ -138,6 +141,7 @@ impl Driver {
     }
 
     pub(crate) fn submit_op_2(&mut self, sqe: squeue::Entry) -> usize {
+        self.needs_flushing = true;
         let index = self.ops.insert();
 
         // Configure the SQE
@@ -162,6 +166,7 @@ impl Driver {
         T: Completable,
         F: FnOnce(&mut T) -> squeue::Entry,
     {
+        self.needs_flushing = true;
         let index = self.ops.insert();
 
         // Configure the SQE

@@ -70,10 +70,10 @@ impl Runtime {
         let rt = tokio::runtime::Builder::new_current_thread()
             .on_thread_park(|| {
                 CONTEXT.with(|x| {
-                    let _ = x
+                    let driver = x
                         .handle()
-                        .expect("Internal error, driver context not present when invoking hooks")
-                        .flush();
+                        .expect("Internal error, driver context not present when invoking hooks");
+                    driver.flush()
                 });
             })
             .enable_all()
@@ -133,6 +133,11 @@ impl Runtime {
         }
 
         CONTEXT.with(|cx| cx.set_handle(self.driver.clone()));
+
+        // println!(
+        //     "Setting up uring runtime on thread {:?}",
+        //     std::thread::current().id()
+        // );
 
         let _guard = ContextGuard;
 
