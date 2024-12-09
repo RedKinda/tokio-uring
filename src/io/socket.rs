@@ -158,9 +158,11 @@ impl Socket {
         }
     }
 
-    pub async fn writev<T: BoundedBuf>(&self, buf: Vec<T>) -> crate::BufResult<usize, Vec<T>> {
-        let op = Op::writev_at(&self.fd, buf, 0).unwrap();
-        op.await
+    pub fn writev<T: BoundedBuf>(
+        &self,
+        buf: Vec<T>,
+    ) -> impl Future<Output = crate::BufResult<usize, Vec<T>>> + '_ {
+        Op::writev_at(&self.fd, buf, 0).unwrap()
     }
 
     pub(crate) async fn send_to<T: BoundedBuf>(
@@ -202,12 +204,14 @@ impl Socket {
         op.await
     }
 
-    pub(crate) async fn read_fixed<T>(&self, buf: T) -> crate::BufResult<usize, T>
+    pub(crate) fn read_fixed<T>(
+        &self,
+        buf: T,
+    ) -> impl Future<Output = crate::BufResult<usize, T>> + '_
     where
         T: BoundedBufMut<BufMut = FixedBuf>,
     {
-        let op = Op::read_fixed_at(&self.fd, buf, 0).unwrap();
-        op.await
+        Op::read_fixed_at(&self.fd, buf, 0).unwrap()
     }
 
     pub(crate) async fn recv_from<T: BoundedBufMut>(

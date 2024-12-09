@@ -92,11 +92,11 @@ impl TcpStream {
     /// In addition to errors that can be reported by `read`,
     /// this operation fails if the buffer is not registered in the
     /// current `tokio-uring` runtime.
-    pub async fn read_fixed<T>(&self, buf: T) -> crate::BufResult<usize, T>
+    pub fn read_fixed<T>(&self, buf: T) -> impl Future<Output = crate::BufResult<usize, T>> + '_
     where
         T: BoundedBufMut<BufMut = FixedBuf>,
     {
-        self.inner.read_fixed(buf).await
+        self.inner.read_fixed(buf)
     }
 
     /// Write some data to the stream from the buffer.
