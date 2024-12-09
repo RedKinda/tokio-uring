@@ -47,8 +47,9 @@ impl Handle {
 
     pub(crate) fn flush(&self) -> io::Result<()> {
         let mut inner = self.inner.borrow_mut();
-        if inner.needs_flushing {
+        if true {
             inner.needs_flushing = false;
+            // println!("flushing");
             inner.submit()
         } else {
             Ok(())

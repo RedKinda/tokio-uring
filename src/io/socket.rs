@@ -1,3 +1,5 @@
+use futures_util::FutureExt;
+
 use crate::io::write::UnsubmittedWrite;
 use crate::runtime::driver::op::Op;
 use crate::{
@@ -6,6 +8,7 @@ use crate::{
     io::SharedFd,
     UnsubmittedOneshot,
 };
+use std::future::Future;
 use std::{
     io,
     net::SocketAddr,
@@ -81,52 +84,78 @@ impl Socket {
         (Ok(()), buf.into_inner())
     }
 
-    pub(crate) async fn write_fixed<T>(&self, buf: T) -> crate::BufResult<usize, T>
+    pub(crate) fn write_fixed<T>(
+        &self,
+        buf: T,
+    ) -> impl Future<Output = crate::BufResult<usize, T>> + '_
     where
         T: BoundedBuf<Buf = FixedBuf>,
     {
-        let op = Op::write_fixed_at(&self.fd, buf, 0).unwrap();
-        op.await
+        Op::write_fixed_at(&self.fd, buf, 0).unwrap()
     }
 
-    pub(crate) async fn write_fixed_all<T>(&self, buf: T) -> crate::BufResult<(), T>
+    pub(crate) fn write_fixed_all<T>(
+        &self,
+        buf: T,
+    ) -> impl Future<Output = crate::BufResult<(), T>> + '_
     where
         T: BoundedBuf<Buf = FixedBuf>,
     {
         let orig_bounds = buf.bounds();
-        let (res, buf) = self.write_fixed_all_slice(buf.slice_full()).await;
-        (res, T::from_buf_bounds(buf, orig_bounds))
+        self.write_fixed_all_slice(buf.slice_full())
+            .map(|(res, buf)| (res, T::from_buf_bounds(buf, orig_bounds)))
     }
 
-    async fn write_fixed_all_slice(
+    fn write_fixed_all_slice(
         &self,
-        mut buf: Slice<FixedBuf>,
-    ) -> crate::BufResult<(), FixedBuf> {
-        while buf.bytes_init() != 0 {
-            let res = self.write_fixed(buf).await;
+        buf: Slice<FixedBuf>,
+    ) -> impl Future<Output = crate::BufResult<(), FixedBuf>> + '_ {
+        let fut = self.write_fixed(buf);
+
+        async move {
+            let (res, mut buf) = fut.await;
             match res {
-                (Ok(0), slice) => {
+                Ok(0) => {
                     return (
                         Err(std::io::Error::new(
                             std::io::ErrorKind::WriteZero,
                             "failed to write whole buffer",
                         )),
-                        slice.into_inner(),
+                        buf.into_inner(),
                     )
                 }
-                (Ok(n), slice) => {
-                    buf = slice.slice(n..);
+                Ok(written) => {
+                    buf = buf.slice(written..);
                 }
-
-                // No match on an EINTR error is performed because this
-                // crate's design ensures we are not calling the 'wait' option
-                // in the ENTER syscall. Only an Enter with 'wait' can generate
-                // an EINTR according to the io_uring man pages.
-                (Err(e), slice) => return (Err(e), slice.into_inner()),
+                Err(e) => return (Err(e), buf.into_inner()),
             }
-        }
 
-        (Ok(()), buf.into_inner())
+            while buf.bytes_init() != 0 {
+                let res = self.write_fixed(buf).await;
+                match res {
+                    (Ok(0), slice) => {
+                        return (
+                            Err(std::io::Error::new(
+                                std::io::ErrorKind::WriteZero,
+                                "failed to write whole buffer",
+                            )),
+                            slice.into_inner(),
+                        )
+                    }
+                    (Ok(n), slice) => {
+                        buf = slice.slice(n..);
+                    }
+
+                    // No match on an EINTR error is performed because this
+                    // crate's design ensures we are not calling the 'wait' option
+                    // in the ENTER syscall. Only an Enter with 'wait' can generate
+                    // an EINTR according to the io_uring man pages.
+                    (Err(e), slice) => return (Err(e), slice.into_inner()),
+                }
+            }
+
+            (Ok(()), buf.into_inner())
+        }
     }
 
     pub async fn writev<T: BoundedBuf>(&self, buf: Vec<T>) -> crate::BufResult<usize, Vec<T>> {

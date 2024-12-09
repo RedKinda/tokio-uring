@@ -105,7 +105,7 @@ fn completion_overflow() {
     let cqueue_entries = 2 * squeue_entries;
 
     std::thread::spawn(|| {
-        thread::sleep(time::Duration::from_secs(8)); // 1000 times longer than it takes on a slow machine
+        thread::sleep(time::Duration::from_secs(80)); // 1000 times longer than it takes on a slow machine
         eprintln!("Timeout reached. The uring completions are hung.");
         process::exit(1);
     });

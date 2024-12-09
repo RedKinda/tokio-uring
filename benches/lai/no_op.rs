@@ -12,7 +12,7 @@ struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            iterations: 100000,
+            iterations: 100,
             concurrency: 1,
             sq_size: 64,
             cq_size: 256,

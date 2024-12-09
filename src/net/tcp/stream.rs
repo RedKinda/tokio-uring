@@ -1,4 +1,5 @@
 use std::{
+    future::Future,
     io,
     net::SocketAddr,
     os::unix::prelude::{AsRawFd, FromRawFd, RawFd},
@@ -192,11 +193,11 @@ impl TcpStream {
     /// This function will return the first error that [`write_fixed`] returns.
     ///
     /// [`write_fixed`]: Self::write_fixed
-    pub async fn write_fixed_all<T>(&self, buf: T) -> crate::BufResult<(), T>
+    pub fn write_fixed_all<T>(&self, buf: T) -> impl Future<Output = crate::BufResult<(), T>> + '_
     where
         T: BoundedBuf<Buf = FixedBuf>,
     {
-        self.inner.write_fixed_all(buf).await
+        self.inner.write_fixed_all(buf)
     }
 
     /// Writes data from multiple buffers into this socket using the scatter/gather IO style.
