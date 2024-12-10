@@ -156,7 +156,10 @@ pub fn start<F: Future>(future: F) -> F::Output {
 /// having to use the io_uring crate as well. Refer to Builder::start example
 /// for its intended usage.
 pub fn uring_builder() -> io_uring::Builder {
-    io_uring::IoUring::builder()
+    let mut b = io_uring::IoUring::builder();
+    b.setup_sqpoll(15);
+
+    b
 }
 
 /// Builder API that can create and start the `io_uring` runtime with non-default parameters,

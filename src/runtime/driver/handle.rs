@@ -41,21 +41,38 @@ impl Handle {
         })
     }
 
+    pub(crate) fn register_eventfd(&self, eventfd: RawFd) -> io::Result<()> {
+        self.inner
+            .borrow_mut()
+            .uring
+            .submitter()
+            .register_eventfd(eventfd)
+    }
+
     pub(crate) fn dispatch_completions(&self) -> u64 {
         self.inner.borrow_mut().dispatch_completions()
     }
 
-    pub(crate) fn flush(&self, submissions_only: bool) -> io::Result<usize> {
+    pub(crate) fn flush(&self) -> io::Result<usize> {
         let mut inner = self.inner.borrow_mut();
-        if inner.needs_flushing || (!submissions_only && inner.num_operations() > 0) {
+        if inner.needs_flushing {
             inner.needs_flushing = false;
-            inner.uring.submit()
+            inner.submit()
         } else {
             // let n = inner.submit().unwrap();
             // if n != 0 {
             //     println!("Flushed even though not marked as needed!");
             // }
             // Ok(n)
+            Ok(0)
+        }
+    }
+
+    pub(crate) fn drive_cq(&self) -> io::Result<usize> {
+        let inner = self.inner.borrow_mut();
+        if inner.num_operations() > 0 {
+            inner.drive_cq()
+        } else {
             Ok(0)
         }
     }
@@ -131,7 +148,7 @@ impl WeakHandle {
 
 impl AsRawFd for Handle {
     fn as_raw_fd(&self) -> RawFd {
-        self.inner.borrow().uring.as_raw_fd()
+        self.inner.borrow().eventfd
     }
 }
 

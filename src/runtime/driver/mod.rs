@@ -27,6 +27,8 @@ pub(crate) struct Driver {
     fixed_buffers: Option<Rc<RefCell<dyn FixedBuffers>>>,
 
     needs_flushing: bool,
+
+    eventfd: RawFd,
 }
 
 struct Ops {
@@ -42,11 +44,13 @@ impl Driver {
     pub(crate) fn new(b: &crate::Builder) -> io::Result<Driver> {
         let uring = b.urb.build(b.entries)?;
 
+        let eventfd = unsafe { nix::libc::eventfd(0, 0) };
         Ok(Driver {
             ops: Ops::new(),
             uring,
             fixed_buffers: None,
             needs_flushing: true,
+            eventfd,
         })
     }
 
@@ -67,6 +71,7 @@ impl Driver {
                 Ok(n) => {
                     self.uring.submission().sync();
                     flushed += n;
+                    // println!("Flushed {} submissions", flushed);
                     return Ok(flushed);
                 }
                 Err(ref e) if e.raw_os_error() == Some(libc::EBUSY) => {
@@ -78,6 +83,10 @@ impl Driver {
                 _ => continue,
             }
         }
+    }
+
+    pub(crate) fn drive_cq(&self) -> io::Result<usize> {
+        self.uring.submitter().drive_cq()
     }
 
     pub(crate) fn dispatch_completions(&mut self) -> u64 {
@@ -100,6 +109,9 @@ impl Driver {
             completed += 1;
         }
 
+        // if completed > 0 {
+        //     println!("Dispatched {} completions", completed);
+        // }
         completed
     }
 
