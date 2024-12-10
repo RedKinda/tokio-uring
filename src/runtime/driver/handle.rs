@@ -45,8 +45,19 @@ impl Handle {
         self.inner.borrow_mut().dispatch_completions()
     }
 
-    pub(crate) fn flush(&self) -> io::Result<usize> {
-        self.inner.borrow_mut().uring.submit()
+    pub(crate) fn flush(&self, force: bool) -> io::Result<usize> {
+        let mut inner = self.inner.borrow_mut();
+        if inner.needs_flushing || force {
+            inner.needs_flushing = false;
+            inner.uring.submit()
+        } else {
+            // let n = inner.submit().unwrap();
+            // if n != 0 {
+            //     println!("Flushed even though not marked as needed!");
+            // }
+            // Ok(n)
+            Ok(0)
+        }
     }
 
     pub(crate) fn register_buffers(

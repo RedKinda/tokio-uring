@@ -68,14 +68,14 @@ impl Runtime {
     /// This takes the tokio-uring [`Builder`](crate::Builder) as a parameter.
     pub fn new(b: &crate::Builder) -> io::Result<Runtime> {
         let rt = tokio::runtime::Builder::new_current_thread()
-            .on_thread_park(|| {
-                CONTEXT.with(|x| {
-                    let _ = x
-                        .handle()
-                        .expect("Internal error, driver context not present when invoking hooks")
-                        .flush();
-                });
-            })
+            // .on_thread_park(|| {
+            //     CONTEXT.with(|x| {
+            //         let _ = x
+            //             .handle()
+            //             .expect("Internal error, driver context not present when invoking hooks")
+            //             .flush(false);
+            //     });
+            // })
             .enable_all()
             .build()?;
 
@@ -158,7 +158,7 @@ fn start_uring_wakes_task(
 }
 
 async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
-    const IDLE_EPOLL: u128 = 5; // ms - make this configurable?
+    const IDLE_EPOLL: u128 = 15; // ms - make this configurable?
     let mut last_success;
     'epolled: loop {
         // Wait for read-readiness - this makes a epoll_wait syscall
@@ -168,6 +168,7 @@ async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
             while guard.get_inner().dispatch_completions() > 0 {
                 // we busy yield while there is a stream of incoming completions
                 tokio::task::yield_now().await;
+                guard.get_inner().flush(true);
             }
 
             last_success = std::time::Instant::now();
@@ -176,6 +177,8 @@ async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
                 tokio::task::yield_now().await;
                 if guard.get_inner().dispatch_completions() > 0 {
                     tokio::task::yield_now().await; // we dispatch_completions() again right after the continue, so yield now
+
+                    guard.get_inner().flush(true);
                     continue 'polled;
                 }
 
