@@ -1,6 +1,7 @@
 use std::future::Future;
 use std::io;
 use std::mem::ManuallyDrop;
+use std::os::fd::{AsRawFd as _, RawFd};
 use tokio::io::unix::AsyncFd;
 use tokio::task::LocalSet;
 
@@ -102,6 +103,11 @@ impl Runtime {
         &self.tokio_rt
     }
 
+    /// Returns the driver fd
+    pub fn driver_fd(&self) -> RawFd {
+        self.driver.as_raw_fd()
+    }
+
     /// Runs a future to completion on the tokio-uring runtime. This is the
     /// runtime's entry point.
     ///
@@ -176,13 +182,34 @@ fn start_uring_wakes_task(
 }
 
 async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
-    loop {
+    const IDLE_EPOLL: u128 = 5; //ms
+    let mut last_success;
+    'epolled: loop {
         // Wait for read-readiness
         let mut guard = driver.readable().await.unwrap();
 
-        guard.get_inner().dispatch_completions();
+        'polled: loop {
+            while guard.get_inner().dispatch_completions() > 0 {
+                // yield to event loop
+                tokio::task::yield_now().await;
+            }
 
-        guard.clear_ready();
+            last_success = std::time::Instant::now();
+
+            // yield until last_success elapsed > IDLE_EPOLL
+            while last_success.elapsed().as_millis() < IDLE_EPOLL {
+                //sleep 1ms
+                // tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                tokio::task::yield_now().await;
+                if guard.get_inner().dispatch_completions() > 0 {
+                    tokio::task::yield_now().await; // we dispatch completions right after the continue, so yield now
+                    continue 'polled;
+                }
+            }
+
+            guard.clear_ready();
+            continue 'epolled;
+        }
     }
 }
 
