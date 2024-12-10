@@ -68,14 +68,14 @@ impl Runtime {
     /// This takes the tokio-uring [`Builder`](crate::Builder) as a parameter.
     pub fn new(b: &crate::Builder) -> io::Result<Runtime> {
         let rt = tokio::runtime::Builder::new_current_thread()
-            // .on_thread_park(|| {
-            //     CONTEXT.with(|x| {
-            //         let _ = x
-            //             .handle()
-            //             .expect("Internal error, driver context not present when invoking hooks")
-            //             .flush(false);
-            //     });
-            // })
+            .on_thread_park(|| {
+                CONTEXT.with(|x| {
+                    let _ = x
+                        .handle()
+                        .expect("Internal error, driver context not present when invoking hooks")
+                        .flush(true);
+                });
+            })
             .enable_all()
             .build()?;
 
@@ -168,7 +168,7 @@ async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
             while guard.get_inner().dispatch_completions() > 0 {
                 // we busy yield while there is a stream of incoming completions
                 tokio::task::yield_now().await;
-                guard.get_inner().flush(true);
+                guard.get_inner().flush(false);
             }
 
             last_success = std::time::Instant::now();
@@ -178,7 +178,7 @@ async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
                 if guard.get_inner().dispatch_completions() > 0 {
                     tokio::task::yield_now().await; // we dispatch_completions() again right after the continue, so yield now
 
-                    guard.get_inner().flush(true);
+                    guard.get_inner().flush(false);
                     continue 'polled;
                 }
 

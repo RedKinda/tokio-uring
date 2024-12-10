@@ -45,9 +45,9 @@ impl Handle {
         self.inner.borrow_mut().dispatch_completions()
     }
 
-    pub(crate) fn flush(&self, force: bool) -> io::Result<usize> {
+    pub(crate) fn flush(&self, submissions_only: bool) -> io::Result<usize> {
         let mut inner = self.inner.borrow_mut();
-        if inner.needs_flushing || force {
+        if inner.needs_flushing || (!submissions_only && inner.num_operations() > 0) {
             inner.needs_flushing = false;
             inner.uring.submit()
         } else {
