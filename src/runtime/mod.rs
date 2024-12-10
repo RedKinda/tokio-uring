@@ -183,14 +183,14 @@ fn start_uring_wakes_task(
 }
 
 async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
-    const IDLE_EPOLL: u128 = 15; // ms - make this configurable?
+    const IDLE_EPOLL: u128 = 20; // ms - make this configurable?
     let mut last_success;
     'epolled: loop {
         // Wait for read-readiness - this makes a epoll_wait syscall
         let mut guard = driver.readable().await.unwrap();
         // println!("Woken up by epoll");
 
-        guard.get_inner().drive_cq();
+        // guard.get_inner().drive_cq();
 
         'polled: loop {
             while guard.get_inner().dispatch_completions() > 0 {
@@ -218,6 +218,8 @@ async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
                     // println!("Idle - now epolling");
                     break;
                 }
+
+                guard.get_inner().drive_cq();
             }
 
             guard.clear_ready();

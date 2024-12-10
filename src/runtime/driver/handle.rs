@@ -70,7 +70,7 @@ impl Handle {
 
     pub(crate) fn drive_cq(&self) -> io::Result<usize> {
         let inner = self.inner.borrow_mut();
-        if inner.num_operations() > 0 {
+        if inner.num_operations() > 0 || inner.needs_flushing {
             inner.drive_cq()
         } else {
             Ok(0)
