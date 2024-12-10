@@ -75,9 +75,11 @@ impl Driver {
         }
     }
 
-    pub(crate) fn dispatch_completions(&mut self) {
+    pub(crate) fn dispatch_completions(&mut self) -> u64 {
         let mut cq = self.uring.completion();
         cq.sync();
+
+        let mut completed = 0;
 
         for cqe in cq {
             if cqe.user_data() == u64::MAX {
@@ -90,7 +92,10 @@ impl Driver {
             let index = cqe.user_data() as _;
 
             self.ops.complete(index, cqe);
+            completed += 1;
         }
+
+        completed
     }
 
     pub(crate) fn register_buffers(

@@ -158,13 +158,37 @@ fn start_uring_wakes_task(
 }
 
 async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
-    loop {
-        // Wait for read-readiness
+    const IDLE_EPOLL: u128 = 5; // ms - make this configurable?
+    let mut last_success;
+    'epolled: loop {
+        // Wait for read-readiness - this makes a epoll_wait syscall
         let mut guard = driver.readable().await.unwrap();
 
-        guard.get_inner().dispatch_completions();
+        'polled: loop {
+            while guard.get_inner().dispatch_completions() > 0 {
+                // we busy yield while there is a stream of incoming completions
+                tokio::task::yield_now().await;
+            }
 
-        guard.clear_ready();
+            last_success = std::time::Instant::now();
+
+            loop {
+                tokio::task::yield_now().await;
+                if guard.get_inner().dispatch_completions() > 0 {
+                    tokio::task::yield_now().await; // we dispatch_completions() again right after the continue, so yield now
+                    continue 'polled;
+                }
+
+                // could be a while loop but we want to check this at the end of the loop
+                // we break when there have been no CQEs for IDLE_EPOLL
+                if last_success.elapsed().as_millis() > IDLE_EPOLL {
+                    break;
+                }
+            }
+
+            guard.clear_ready();
+            continue 'epolled;
+        }
     }
 }
 

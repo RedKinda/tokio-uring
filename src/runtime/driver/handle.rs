@@ -41,7 +41,7 @@ impl Handle {
         })
     }
 
-    pub(crate) fn dispatch_completions(&self) {
+    pub(crate) fn dispatch_completions(&self) -> u64 {
         self.inner.borrow_mut().dispatch_completions()
     }
 
