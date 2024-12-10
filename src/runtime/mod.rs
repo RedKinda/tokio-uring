@@ -73,8 +73,8 @@ impl Runtime {
                 CONTEXT.with(|x| {
                     let driver = x
                         .handle()
-                        .expect("Internal error, driver context not present when invoking hooks");
-                    driver.flush()
+                        .expect("Internal error, driver context not present when invoking hooks")
+                        .flush(true);
                 });
             })
             .enable_all()
@@ -182,28 +182,34 @@ fn start_uring_wakes_task(
 }
 
 async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
-    const IDLE_EPOLL: u128 = 5; //ms
+    const IDLE_EPOLL: u128 = 15; // ms - make this configurable?
     let mut last_success;
     'epolled: loop {
-        // Wait for read-readiness
+        // Wait for read-readiness - this makes a epoll_wait syscall
         let mut guard = driver.readable().await.unwrap();
 
         'polled: loop {
             while guard.get_inner().dispatch_completions() > 0 {
-                // yield to event loop
+                // we busy yield while there is a stream of incoming completions
                 tokio::task::yield_now().await;
+                guard.get_inner().flush(false);
             }
 
             last_success = std::time::Instant::now();
 
-            // yield until last_success elapsed > IDLE_EPOLL
-            while last_success.elapsed().as_millis() < IDLE_EPOLL {
-                //sleep 1ms
-                // tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            loop {
                 tokio::task::yield_now().await;
                 if guard.get_inner().dispatch_completions() > 0 {
-                    tokio::task::yield_now().await; // we dispatch completions right after the continue, so yield now
+                    tokio::task::yield_now().await; // we dispatch_completions() again right after the continue, so yield now
+
+                    guard.get_inner().flush(false);
                     continue 'polled;
+                }
+
+                // could be a while loop but we want to check this at the end of the loop
+                // we break when there have been no CQEs for IDLE_EPOLL
+                if last_success.elapsed().as_millis() > IDLE_EPOLL {
+                    break;
                 }
             }
 

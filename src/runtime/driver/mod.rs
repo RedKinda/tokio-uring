@@ -60,15 +60,14 @@ impl Driver {
         self.ops.lifecycle.len()
     }
 
-    pub(crate) fn submit(&mut self) -> io::Result<()> {
+    pub(crate) fn submit(&mut self) -> io::Result<usize> {
+        let mut flushed = 0;
         loop {
             match self.uring.submit() {
                 Ok(n) => {
-                    if n == 0 {
-                        // println!("empty flush :c");
-                    }
                     self.uring.submission().sync();
-                    return Ok(());
+                    flushed += n;
+                    return Ok(flushed);
                 }
                 Err(ref e) if e.raw_os_error() == Some(libc::EBUSY) => {
                     self.dispatch_completions();
@@ -149,7 +148,7 @@ impl Driver {
     }
 
     pub(crate) fn submit_op_2(&mut self, sqe: squeue::Entry) -> usize {
-        // self.needs_flushing = true;
+        self.needs_flushing = true;
         let index = self.ops.insert();
 
         // Configure the SQE
@@ -174,7 +173,7 @@ impl Driver {
         T: Completable,
         F: FnOnce(&mut T) -> squeue::Entry,
     {
-        // self.needs_flushing = true;
+        self.needs_flushing = true;
         let index = self.ops.insert();
 
         // Configure the SQE
