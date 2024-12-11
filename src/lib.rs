@@ -157,7 +157,7 @@ pub fn start<F: Future>(future: F) -> F::Output {
 /// for its intended usage.
 pub fn uring_builder() -> io_uring::Builder {
     let mut b = io_uring::IoUring::builder();
-    b.setup_sqpoll(15);
+    // b.setup_sqpoll(15);
 
     b
 }

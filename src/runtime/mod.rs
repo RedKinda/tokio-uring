@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::future::Future;
 use std::io;
 use std::mem::ManuallyDrop;
@@ -105,7 +106,7 @@ impl Runtime {
 
     /// Returns the driver fd
     pub fn driver_fd(&self) -> RawFd {
-        self.driver.as_raw_fd()
+        self.driver.borrow().uring_raw_fd()
     }
 
     /// Runs a future to completion on the tokio-uring runtime. This is the
@@ -183,7 +184,7 @@ fn start_uring_wakes_task(
 }
 
 async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
-    const IDLE_EPOLL: u128 = 20; // ms - make this configurable?
+    const IDLE_EPOLL: u128 = 15; // ms - make this configurable?
     let mut last_success;
     'epolled: loop {
         // Wait for read-readiness - this makes a epoll_wait syscall
@@ -212,14 +213,14 @@ async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
                     continue 'polled;
                 }
 
+                guard.get_inner().drive_cq();
+
                 // could be a while loop but we want to check this at the end of the loop
                 // we break when there have been no CQEs for IDLE_EPOLL
                 if last_success.elapsed().as_millis() > IDLE_EPOLL {
                     // println!("Idle - now epolling");
                     break;
                 }
-
-                guard.get_inner().drive_cq();
             }
 
             guard.clear_ready();
